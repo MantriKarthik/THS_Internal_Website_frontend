@@ -9,7 +9,7 @@
 <body>
   <header class="dashboard-header">
     <div class="logo-container">
-      <img src="images/ths-logo.png" alt="THS Logo" class="logo" />
+      <img src="ths-logo.png" alt="THS Logo" class="logo" />
     </div>
     <h1 class="dashboard-title">Welcome to Your Dashboard</h1>
   </header>
@@ -218,7 +218,7 @@
     function fetchCatalog() {
       catalogLoading.style.display = 'block';
       catalogList.innerHTML = '';
-      fetch('http://127.0.0.1:5000/api/catalog', {
+      fetch('https://ths-internal-website.onrender.com', {
         headers: { 'Authorization': 'Bearer ' + token }
       })
         .then(res => res.json())
@@ -327,3 +327,4 @@
   </script>
 </body>
 </html>
+
