@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>THS Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="dashboard-header">
+    <div class="logo-container">
+      <img src="images/ths-logo.png" alt="THS Logo" class="logo" />
+    </div>
+    <h1 class="dashboard-title">Welcome to Your Dashboard</h1>
+  </header>
+  <main class="dashboard-main">
+    <div class="dashboard-flex">
+      <section class="dashboard-section dashboard-catalog-section" id="dashboard-catalog">
+        <div class="dashboard-container">
+          <h2 class="dashboard-section-title">Catalog</h2>
+          <input type="text" id="catalog-search" class="catalog-search" placeholder="Search catalog..." aria-label="Search catalog" />
+          <div class="catalog-controls">
+            <span id="selected-count" class="selected-count">Selected: 0</span>
+            <button id="clear-selection" class="clear-selection" type="button">Clear Selection</button>
+          </div>
+          <div id="catalog-list" class="dashboard-list"></div>
+          <div id="catalog-loading" class="catalog-loading" style="display:none;">Loading catalog...</div>
+          <button id="create-quotation-btn" class="create-quotation-btn" style="display:none;margin-top:2rem;">Create Quotation</button>
+        </div>
+      </section>
+      <section class="dashboard-section dashboard-quotation-section" id="dashboard-quotation" style="display:none;">
+        <div class="dashboard-container">
+          <h2 class="dashboard-section-title">Create Quotation</h2>
+          <div id="quotation-form-area" class="dashboard-form-area"></div>
+          <div class="excel-note">
+            <strong>Note:</strong> For proper viewing and single page layout, please click <b>"Enable Editing"</b> in Excel after opening the downloaded file.
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer class="dashboard-footer">
+    <div class="dashboard-container">
+      <p class="footer-copyright">&copy; 2025 THS. All rights reserved.</p>
+      <p class="footer-contact">Contact: info@ths.com | +91 98765 43210</p>
+    </div>
+  </footer>
+  <div id="loading-overlay">
+    <div class="spinner" aria-hidden="true"></div>
+  <div>Preparing download, please wait</div>
+  </div>
+  <script>
+    // Only allow access if logged in
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      window.location.href = 'index.html';
+    }
+    // DOM elements
+    const catalogList = document.getElementById('catalog-list');
+    const catalogLoading = document.getElementById('catalog-loading');
+    const catalogSearch = document.getElementById('catalog-search');
+    const selectedCount = document.getElementById('selected-count');
+    const clearSelectionBtn = document.getElementById('clear-selection');
+    let catalog = [];
+    let selectedItems = [];
+  let itemQuantities = {};
+    let filteredCatalog = [];
+    let currentPage = 1;
+    const itemsPerPage = 25;
+    function updateSelectedCount() {
+      selectedCount.textContent = `Selected: ${selectedItems.length}`;
+      const createBtn = document.getElementById('create-quotation-btn');
+      if (selectedItems.length > 0) {
+        createBtn.style.display = '';
+      } else {
+        createBtn.style.display = 'none';
+        document.getElementById('dashboard-quotation').style.display = 'none';
+      }
+    }
+    document.getElementById('create-quotation-btn').onclick = function() {
+      document.getElementById('dashboard-quotation').style.display = '';
+      renderQuotationForm(selectedItems);
+      document.getElementById('dashboard-quotation').scrollIntoView({behavior: 'smooth'});
+    };
+    function renderCatalog() {
+      const q = catalogSearch.value.trim().toLowerCase();
+      if (q.length === 0) {
+        filteredCatalog = catalog;
+      } else {
+        // If search matches an exact item code, show only that item
+        const exactMatch = catalog.find(item => {
+          let code = item["HYVA Item Code"];
+          if (typeof code !== "string") code = code ? String(code) : "";
+          return code.toLowerCase() === q;
+        });
+        if (exactMatch) {
+          filteredCatalog = [exactMatch];
+        } else {
+          filteredCatalog = catalog.filter(item => {
+            let code = item["HYVA Item Code"];
+            let desc = item["Description"];
+            if (typeof code !== "string") code = code ? String(code) : "";
+            if (typeof desc !== "string") desc = desc ? String(desc) : "";
+            return code.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
+          });
+        }
+      }
+      const totalPages = Math.ceil(filteredCatalog.length / itemsPerPage) || 1;
+      if (currentPage > totalPages) currentPage = totalPages;
+      const startIdx = (currentPage - 1) * itemsPerPage;
+      const endIdx = startIdx + itemsPerPage;
+      const pageItems = filteredCatalog.slice(startIdx, endIdx);
+      if (!filteredCatalog.length) {
+        catalogList.innerHTML = '<div class="catalog-empty" style="min-height:300px;display:flex;align-items:center;justify-content:center;">No items found.</div>';
+        document.getElementById('catalog-pagination')?.remove();
+        return;
+      }
+      // Render as table with multiple columns per row
+  const columns = 5; // Number of columns per row
+      let tableHtml = '<table class="catalog-table" style="min-height:300px;"><tbody>';
+      for (let i = 0; i < pageItems.length; i += columns) {
+        tableHtml += '<tr>';
+        for (let j = 0; j < columns; j++) {
+          const item = pageItems[i + j];
+          if (item) {
+            const selected = selectedItems.includes(item) ? ' selected' : '';
+            let qtyInput = '';
+            if (selected) {
+              const itemCode = item["HYVA Item Code"];
+              if (itemQuantities[itemCode] === undefined) itemQuantities[itemCode] = 1;
+              qtyInput = `<div class='catalog-qty'><label>Qty: <input type='number' min='1' value='${itemQuantities[itemCode]}' data-itemcode='${itemCode}' class='catalog-qty-input' style='width:50px;'/></label></div>`;
+            }
+            tableHtml += `<td class='catalog-li${selected}' data-idx='${catalog.indexOf(item)}' tabindex="0" aria-label='${item["HYVA Item Code"] || "Catalog Item"}' title='${item["Description"] || ""}'>
+              <div class='catalog-item-name'>${item["HYVA Item Code"] ? item["HYVA Item Code"] : JSON.stringify(item)}</div>
+              <div class='catalog-item-desc'>${item["Description"] ? item["Description"] : ''}</div>
+              ${qtyInput}
+            </td>`;
+          }
+        }
+        tableHtml += '</tr>';
+      }
+      tableHtml += '</tbody></table>';
+      catalogList.innerHTML = tableHtml;
+      // Pagination controls
+      let paginationHtml = `<div id='catalog-pagination' class='catalog-pagination'>`;
+      paginationHtml += `<button class='pagination-btn' ${currentPage === 1 ? 'disabled' : ''}>&laquo; Prev</button>`;
+      paginationHtml += `<span class='pagination-info'>Page ${currentPage} of ${totalPages}</span>`;
+      paginationHtml += `<button class='pagination-btn' ${currentPage === totalPages ? 'disabled' : ''}>Next &raquo;</button>`;
+      paginationHtml += `</div>`;
+      catalogList.insertAdjacentHTML('beforeend', paginationHtml);
+      document.querySelectorAll('.catalog-li').forEach(li => {
+        li.onclick = function() {
+          const idx = parseInt(li.getAttribute('data-idx'));
+          const item = catalog[idx];
+          const itemCode = item["HYVA Item Code"];
+          if (!selectedItems.includes(item)) {
+            selectedItems.push(item);
+            if (itemQuantities[itemCode] === undefined) itemQuantities[itemCode] = 1;
+          } else {
+            selectedItems = selectedItems.filter(i => i !== item);
+            delete itemQuantities[itemCode];
+          }
+          updateSelectedCount();
+          renderCatalog();
+          renderQuotationForm(selectedItems);
+        };
+      // Listen for quantity input changes
+      document.querySelectorAll('.catalog-qty-input').forEach(input => {
+        input.addEventListener('change', function(e) {
+          e.stopPropagation();
+          const itemCode = input.getAttribute('data-itemcode');
+          let val = parseInt(input.value);
+          if (isNaN(val) || val < 1) val = 1;
+          itemQuantities[itemCode] = val;
+          input.value = val;
+        });
+        input.addEventListener('keydown', function(e) {
+          e.stopPropagation();
+        });
+        input.addEventListener('click', function(e) {
+          e.stopPropagation();
+        });
+        input.addEventListener('focus', function(e) {
+          e.stopPropagation();
+        });
+      });
+        li.onkeydown = function(e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            li.click();
+          }
+        };
+      });
+      // Pagination button events
+      const pagBtns = document.querySelectorAll('.pagination-btn');
+      if (pagBtns.length === 2) {
+        pagBtns[0].onclick = function() {
+          if (currentPage > 1) {
+            currentPage--;
+            renderCatalog();
+          }
+        };
+        pagBtns[1].onclick = function() {
+          if (currentPage < totalPages) {
+            currentPage++;
+            renderCatalog();
+          }
+        };
+      }
+      updateSelectedCount();
+    }
+    catalogSearch.addEventListener('input', renderCatalog);
+    clearSelectionBtn.addEventListener('click', function() {
+      selectedItems = [];
+      updateSelectedCount();
+      renderCatalog();
+      renderQuotationForm(selectedItems);
+    });
+    function fetchCatalog() {
+      catalogLoading.style.display = 'block';
+      catalogList.innerHTML = '';
+      fetch('http://127.0.0.1:5000/api/catalog', {
+        headers: { 'Authorization': 'Bearer ' + token }
+      })
+        .then(res => res.json())
+        .then(data => {
+          catalogLoading.style.display = 'none';
+          catalog = Array.isArray(data) && data.length ? data : [];
+          renderCatalog();
+          renderQuotationForm(selectedItems);
+        })
+        .catch(() => {
+          catalogLoading.style.display = 'none';
+          catalog = [];
+          renderCatalog();
+          renderQuotationForm(selectedItems);
+        });
+    }
+    fetchCatalog();
+    function renderQuotationForm(items) {
+      const area = document.getElementById('quotation-form-area');
+      if (!items.length) {
+        area.innerHTML = '<p class="quotation-hint">Select items from catalog to create a quotation.</p>';
+        return;
+      }
+      area.innerHTML = `<form id='quotation-form' class='quotation-form'>
+        <input type='text' name='customer' placeholder='Customer Name' required class='quotation-notes' />
+        <div class='quotation-actions'>
+          <button type='button' id='download-excel' class='quotation-download'>Download Quotation as Excel</button>
+        </div>
+        <ul class='quotation-items'>${items.map(i => {
+          const itemCode = i["HYVA Item Code"];
+          const qty = itemQuantities[itemCode] || 1;
+          return `<li class='quotation-item'>
+            <span class='quotation-item-name'>${itemCode || ''}</span><br>
+            <span class='quotation-item-desc'>${i["Description"] || ''}</span><br>
+            <span class='quotation-item-qty'>Qty: ${qty}</span>
+          </li>`;
+        }).join('')}</ul>
+      </form>`;
+      document.getElementById('download-excel').onclick = function() {
+        const customerName = document.querySelector('#quotation-form input[name="customer"]').value.trim() || 'customer';
+        // Attach quantity to each item before sending
+        const itemsWithQty = items.map(i => {
+          const itemCode = i["HYVA Item Code"];
+          return { ...i, Qty: itemQuantities[itemCode] || 1 };
+        });
+        // Show loading overlay while server prepares the file
+        const overlay = document.getElementById('loading-overlay');
+        const btn = document.getElementById('download-excel');
+        overlay.style.display = 'flex';
+        btn.disabled = true;
+        fetch('http://127.0.0.1:5000/api/quotation/excel', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          },
+          body: JSON.stringify({ items: itemsWithQty, customer: customerName })
+        })
+          .then(response => {
+            console.log('Download response status:', response.status);
+            console.log('Content-Type:', response.headers.get('content-type'));
+            console.log('Content-Disposition:', response.headers.get('content-disposition'));
+            console.log('Content-Length:', response.headers.get('content-length'));
+            if (!response.ok) {
+              // try to read error body (JSON or text)
+              return response.text().then(text => {
+                console.error('Server error body:', text);
+                throw new Error(text || 'Failed to generate file');
+              });
+            }
+            return response.blob();
+          })
+          .then(blob => {
+            console.log('Received blob, size:', blob.size);
+            if (!blob || blob.size === 0) {
+              throw new Error('Downloaded file is empty');
+            }
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${customerName}_quotation.xlsm`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+          })
+          .catch(err => {
+            console.error('Download error', err);
+            // Show error in overlay so user notices
+            overlay.innerHTML = `<div style="color:#fff;text-align:center"><div class="spinner" aria-hidden="true"></div><div>Error: ${String(err).replace(/</g,'&lt;')}</div></div>`;
+            setTimeout(() => {
+              alert('Failed to download quotation. See console for details.');
+            }, 200);
+          })
+          .finally(() => {
+            // Restore overlay to default message after a short delay so it's not permanent on success
+            setTimeout(() => {
+              overlay.style.display = 'none';
+              overlay.innerHTML = '<div class="spinner" aria-hidden="true"></div><div>Preparing download, please wait</div>';
+              btn.disabled = false;
+            }, 500);
+          });
+      };
+    }
+    console.log(catalog[0]);
+  </script>
+</body>
+</html>

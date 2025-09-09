@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>THS Employee Login</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body {
+      background: linear-gradient(120deg, #274060 0%, #00bfff 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Arial, sans-serif;
+    }
+    .login-container {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 4px 24px rgba(39,64,96,0.12);
+      padding: 2.5rem 2rem 2rem 2rem;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+    .login-container h2 {
+      color: #274060;
+      margin-bottom: 1.5rem;
+      font-size: 2rem;
+      font-weight: 600;
+    }
+    .login-container form {
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+    .login-container input {
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      border: 1px solid #bfc9d1;
+      font-size: 1.1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-container input:focus {
+      border-color: #00bfff;
+    }
+    .login-container button {
+      background: linear-gradient(90deg,#00bfff 60%,#274060 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(39,64,96,0.08);
+      transition: background 0.2s;
+    }
+    .login-container button:hover {
+      background: linear-gradient(90deg,#274060 60%,#00bfff 100%);
+    }
+    .error-message {
+      color: #d90429;
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      display: none;
+    }
+    .logo {
+      width: 80px;
+      margin-bottom: 1.5rem;
+    }
+    @media (max-width: 500px) {
+      .login-container {
+        padding: 1.5rem 0.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="login-container">
+    <img src="images/ths-logo.png" alt="THS Logo" class="logo">
+    <h2>Employee Login</h2>
+    <div class="error-message" id="error-message"></div>
+    <form id="employee-login-form">
+      <input type="text" name="username" placeholder="Username" required autocomplete="username">
+      <input type="password" name="password" placeholder="Password" required autocomplete="current-password">
+      <button type="submit">Login</button>
+    </form>
+  </div>
+  <script>
+    document.getElementById('employee-login-form').onsubmit = async function(e) {
+      e.preventDefault();
+      const username = e.target.username.value.trim();
+      const password = e.target.password.value;
+      const errorDiv = document.getElementById('error-message');
+      errorDiv.style.display = 'none';
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (res.status === 200 && data.access_token) {
+          localStorage.setItem('access_token', data.access_token);
+          window.location.href = 'dashboard.html';
+        } else {
+          errorDiv.textContent = data.msg || 'Invalid credentials.';
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        errorDiv.textContent = 'Server error. Please try again later.';
+        errorDiv.style.display = 'block';
+      }
+    };
+  </script>
+</body>
+</html>
