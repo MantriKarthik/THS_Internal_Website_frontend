@@ -96,7 +96,7 @@
       const errorDiv = document.getElementById('error-message');
       errorDiv.style.display = 'none';
       try {
-        const res = await fetch('http://127.0.0.1:5000/api/login', {
+        const res = await fetch('https://ths-internal-website.onrender.com', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ username, password })
@@ -117,4 +117,5 @@
   </script>
 </body>
 </html>
+
 
